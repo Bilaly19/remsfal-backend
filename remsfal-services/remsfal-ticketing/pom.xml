@@ -19,6 +19,11 @@
     <dependencies>
         <dependency>
             <groupId>de.remsfal</groupId>
+            <artifactId>remsfal-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>de.remsfal</groupId>
             <artifactId>remsfal-common</artifactId>
             <version>${project.version}</version>
         </dependency>

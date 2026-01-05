@@ -28,6 +28,7 @@ import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 
 import de.remsfal.core.json.ticketing.IssueJson;
 import de.remsfal.core.json.ticketing.IssueListJson;
+import de.remsfal.core.json.ticketing.IssueStatusJson;
 import de.remsfal.core.model.project.RentalUnitModel.UnitType;
 import de.remsfal.core.model.ticketing.IssueModel.Status;
 import de.remsfal.core.validation.PatchValidation;
@@ -98,6 +99,18 @@ public interface IssueEndpoint {
         @Parameter(description = "Issue information", required = true)
         @Valid @ConvertGroup(to = PatchValidation.class) IssueJson issue);
 
+    @PATCH
+    @Path("/{issueId}/status")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    @Operation(summary = "Update the status of an issue.")
+    @APIResponse(responseCode = "401", description = "No user authentication provided via session cookie")
+    @APIResponse(responseCode = "404", description = "The issue does not exist")
+    IssueJson updateIssueStatus(
+            @Parameter(description = "ID of the issue", required = true)
+            @PathParam("issueId") @NotNull UUID issueId,
+            @Parameter(description = "New issue status", required = true)
+            @Valid IssueStatusJson status);
     @DELETE
     @Path("/{issueId}")
     @Operation(summary = "Delete an existing issue.")

@@ -94,6 +94,13 @@ public class IssueController {
         return repository.update(entity);
     }
 
+    public IssueModel updateIssueStatus(final IssueKey key, final Status status) {
+        logger.infov("Updating issue status (projectId={0}, issueId={1})", key.getProjectId(), key.getIssueId());
+        final IssueEntity entity = repository.find(key)
+                .orElseThrow(() -> new NotFoundException("Issue not found"));
+        entity.setStatus(status);
+        return repository.update(entity);
+    }
     public void deleteIssue(final IssueKey key) {
         logger.infov("Deleting issue (projectId={0}, issueId={1})", key.getProjectId(), key.getIssueId());
         repository.delete(key);
