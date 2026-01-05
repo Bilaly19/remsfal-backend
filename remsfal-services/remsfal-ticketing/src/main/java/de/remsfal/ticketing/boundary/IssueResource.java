@@ -1,5 +1,6 @@
 package de.remsfal.ticketing.boundary;
 
+import de.remsfal.core.model.UserModel;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
@@ -22,7 +23,7 @@ import de.remsfal.core.json.UserJson.UserRole;
 import de.remsfal.core.json.ticketing.IssueJson;
 import de.remsfal.core.json.ticketing.IssueListJson;
 import de.remsfal.core.json.ticketing.IssueStatusJson;
-import de.remsfal.core.model.UserModel;
+
 import de.remsfal.core.model.project.RentalUnitModel.UnitType;
 import de.remsfal.core.model.ProjectMemberModel;
 import de.remsfal.core.model.ticketing.IssueModel;
@@ -110,13 +111,22 @@ public class IssueResource extends AbstractResource implements IssueEndpoint {
             throw new ForbiddenException("User does not have permission to create issues in this project");
         }
         final IssueJson response;
+        final UserModel user = principalAsUserModel();
+        final IssueModel issueModel = issue;
         if (principalRole == UserRole.MANAGER) {
-            response = IssueJson.valueOf(issueController.createIssue((UserModel) principal, (IssueModel) issue));
+            response = IssueJson.valueOf(issueController.createIssue(user, issueModel));
         } else if (principalRole == UserRole.TENANT) {
-            response = IssueJson.valueOf(issueController.createIssue((UserModel) principal, (IssueModel) issue));
+            response = IssueJson.valueOfFiltered(
+                    issueController.createIssue(user, issueModel, IssueModel.Status.PENDING));
         } else {
             throw new ForbiddenException("User does not have permission to create issues in this project");
         }
+        NotificationEvent createdEvent = buildIssueEvent(
+                "issue.created",
+                response.getProjectId(),
+                response.getId(),
+                Map.of("issue", response));
+        notificationDispatcher.dispatch(createdEvent);
         final URI location = uri.getAbsolutePathBuilder().path(issue.getProjectId().toString()).build();
         return Response.created(location)
                 .type(MediaType.APPLICATION_JSON)
@@ -141,7 +151,14 @@ public class IssueResource extends AbstractResource implements IssueEndpoint {
         if (!principal.getProjectRoles().containsKey(entity.getProjectId())) {
             throw new ForbiddenException("User does not have permission to update this issue");
         }
-        return IssueJson.valueOf(issueController.updateIssue(entity.getKey(), issue));
+        IssueJson updated = IssueJson.valueOf(issueController.updateIssue(entity.getKey(), issue));
+        NotificationEvent updatedEvent = buildIssueEvent(
+                "issue.updated",
+                updated.getProjectId(),
+                updated.getId(),
+                Map.of("issue", updated));
+        notificationDispatcher.dispatch(updatedEvent);
+        return updated;
     }
     @Override
     public IssueJson updateIssueStatus(final UUID issueId, final IssueStatusJson status) {
@@ -172,11 +189,53 @@ public class IssueResource extends AbstractResource implements IssueEndpoint {
         } else {
             throw new ForbiddenException("User does not have permission to delete this issue");
         }
+        NotificationEvent deletedEvent = buildIssueEvent(
+                "issue.deleted",
+                entity.getProjectId(),
+                entity.getId(),
+                Map.of(
+                        "issueId", entity.getId().toString(),
+                        "deleted", true));
+        notificationDispatcher.dispatch(deletedEvent);
     }
 
     @Override
     public ChatSessionResource getChatSessionResource() {
         return resourceContext.initResource(chatSessionResource.get());
+    }
+    private NotificationEvent buildIssueEvent(final String type, final UUID projectId, final UUID issueId,
+                                              final Map<String, Object> data) {
+        String correlationId = headers != null ? headers.getHeaderString("X-Correlation-ID") : null;
+        return new NotificationEvent(
+                type,
+                new NotificationEvent.EventContext(NotificationContextType.PROJECT.getValue(), projectId.toString()),
+                new NotificationEvent.EventEntity("issue", issueId.toString()),
+                data,
+                new NotificationEvent.EventMeta(Instant.now(), principal.getId(), correlationId));
+    }
+
+    private UserModel principalAsUserModel() {
+        return new UserModel() {
+            @Override
+            public UUID getId() {
+                return principal.getId();
+            }
+
+            @Override
+            public String getEmail() {
+                return principal.getEmail();
+            }
+
+            @Override
+            public String getName() {
+                return principal.getName();
+            }
+
+            @Override
+            public Boolean isActive() {
+                return principal.isActive();
+            }
+        };
     }
 
 }
