@@ -42,30 +42,24 @@ public class NotificationResource implements NotificationEndpoint {
     @Override
     public void subscribe(final String contextType, final UUID contextId,
                           @Context final SseEventSink eventSink, @Context final Sse sse) {
+
         if (contextId == null) {
             throw new BadRequestException("contextId is required");
         }
+
         NotificationContextType type = NotificationContextType.fromString(contextType);
         if (type == null) {
             throw new BadRequestException("Unsupported contextType");
         }
+
         authorizeContext(type, contextId);
 
         NotificationContext context = new NotificationContext(type, contextId);
-        NotificationConnection connection = dispatcher.register(context, principal.getId(), eventSink, sse);
 
-        if (routingContext != null) {
-            routingContext.response()
-                    .putHeader("Content-Type", "text/event-stream")
-                    .putHeader("Cache-Control", "no-cache")
-                    .putHeader("Connection", "keep-alive")
-                    .putHeader("X-Accel-Buffering", "no")
-                    .setChunked(true)
-                    .closeHandler(event -> dispatcher.unregister(connection))
-                    .exceptionHandler(error -> dispatcher.unregister(connection));
-        } else {
-            logger.debug("RoutingContext not available for SSE headers");
-        }
+        // Register + send "connected"
+        dispatcher.register(context, principal.getId(), eventSink, sse);
+
+
     }
 
     private void authorizeContext(final NotificationContextType type, final UUID contextId) {
